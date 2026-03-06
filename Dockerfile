@@ -17,10 +17,8 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 RUN composer install
 
-# enable apache rewrite
 RUN a2enmod rewrite
 
-# change apache document root to Laravel public
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
