@@ -94,7 +94,7 @@
                             <br><br><br>
                             _____________________________
                             <br>
-                            {{ $voyage->creator->name ?? 'N/A' }}
+                            {{ $voyage->creator->name }} {{ $voyage->creator->lastname }}
                         </td>
                         <td style="border:0; width:50%; text-align:right;"> 
                             Date Generated:

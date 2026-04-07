@@ -60,5 +60,12 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Department::class);
     }
-    
+    public function isAdmin()
+    {
+        return $this->role === 'admin';
+    }
+    public function vessel()
+{
+    return $this->hasOne(Vessel::class, 'captain_id');
+}
 }

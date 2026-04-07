@@ -12,7 +12,7 @@ class DashboardController extends Controller
     public function index()
     {
         $totalVessels = Vessel::count();
-        $totalLogs = VoyageLog::count();
+        $totalLogs = \App\Models\VoyageLogHeader::count();
         $anchored = VoyageLog::where('voyage_status', 'anchored')->count();
         $sailing = VoyageLog::where('voyage_status', 'sailing')->count();
         $totalCrew = VoyageLog::sum('crew_on_board');

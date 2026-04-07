@@ -14,7 +14,8 @@ class VesselCertificate extends Model
         'certificate_name',
         'issue_date',
         'expiry_date',
-        'remarks'
+        'remarks',
+        'document'
     ];
 
     public function vessel()

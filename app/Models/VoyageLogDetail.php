@@ -19,7 +19,10 @@ class VoyageLogDetail extends Model
         'date_time_ended',
         'total_hours',
         'date_complete',
-        'status'
+        'status',
+        'is_paused',
+        'pause_at',
+        'total_pause'
     ];
 
     public function header()

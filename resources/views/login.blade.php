@@ -3,18 +3,15 @@
 <head>
     <title>Villa System Login</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-
     <style>
         body {
             background: linear-gradient(to right, #1e3c72, #2a5298);
             height: 100vh;
         }
-
         .login-card {
             border-radius: 20px;
             padding: 30px;
         }
-
         .logo {
             font-size: 30px;
             font-weight: bold;
@@ -22,14 +19,12 @@
         }
     </style>
 </head>
-
 <body>
-
 <div class="container d-flex justify-content-center align-items-center vh-100">
-    <div class="card login-card shadow" style="width: 400px;">
-        
+    <div class="card login-card shadow" style="width: 400px;">  
         <div class="text-center mb-3">
-            <div class="logo">VILLA GROUP of Companies</div>
+            <div class="logo">VILLA GROUP</div>
+            <div class="logo">of Companies</div>
         </div>
 
         @if(session('error'))

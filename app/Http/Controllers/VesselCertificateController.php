@@ -6,39 +6,71 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Vessel;
 use App\Models\VesselCertificate;
+use Illuminate\Support\Facades\Auth;
 
 class VesselCertificateController extends Controller
 {
     //
     public function index()
-    {
-    $vessels = Vessel::withCount([
+{
+    $user = auth()->user();
+
+    // COMMON COUNTS
+    $withCounts = function ($query) {
+        return $query->withCount([
             'certificates as expired_count' => function($q){
-             $q->where('expiry_date','<',now());
+                $q->where('expiry_date', '<', now());
             },
             'certificates as expiring_count' => function($q){
-                $q->whereBetween('expiry_date',[now(),now()->copy()->addDays(30)]);
+                $q->whereBetween('expiry_date', [now(), now()->copy()->addDays(30)]);
             }
-        ])->get();
+        ]);
+    };
 
-        return view('vessel_certificates.index', compact('vessels'));
+    //  ADMIN or MANAGER → TANAN
+    if ($user->is_admin == 1 || ($user->role == 'manager' && $user->department_id == 1)) {
+
+        $vessels = $withCounts(Vessel::query())->get();
+
+    } else {
+
+        // CAPTAIN / OTHER → assigned vessel only
+        $vessels = $withCounts(
+            Vessel::where('captain_id', $user->id)
+        )->get();
     }
+
+    return view('vessel_certificates.index', compact('vessels'));
+}
     public function create($vessel)
     {
         $vessel = Vessel::findOrFail($vessel);
         return view('vessel_certificates.create', compact('vessel'));
     }
     public function store(Request $request)
-    {
-        VesselCertificate::create([
-            'vessel_id' => $request->vessel_id,
-            'certificate_name' => $request->certificate_name,
-            'issue_date' => $request->issue_date,
-            'expiry_date' => $request->expiry_date,
-            'remarks' => $request->remarks,
-        ]);
-        return redirect()->route('vessel-certificates.show');
+{
+    $data = $request->validate([
+        'vessel_id' => 'required',
+        'certificate_name' => 'required',
+        'issue_date' => 'required|date',
+        'expiry_date' => 'required|date',
+        'remarks' => 'nullable',
+        'document' => 'nullable|file|max:5120' // 5MB
+    ]);
+
+    // FILE UPLOAD
+    if ($request->hasFile('document')) {
+        $file = $request->file('document');
+        $filename = time().'_'.$file->getClientOriginalName();
+        $file->move(public_path('uploads/certificates'), $filename);
+        $data['document'] = $filename;
     }
+
+    VesselCertificate::create($data);
+
+    return redirect()->route('vessel-certificates.show', $data['vessel_id'])
+        ->with('success', 'Certificate saved!');
+}
     /*public function vesselCertificates($id)
     {
         $vessel = Vessel::findOrFail($id);
@@ -88,17 +120,37 @@ class VesselCertificateController extends Controller
         return view('vessel_certificates.edit', compact('certificate'));
     }
     public function update(Request $request, $id)
-    {
-        $certificate = VesselCertificate::findOrFail($id);
-        $certificate->update([
-            'certificate_name' => $request->certificate_name,
-            'issue_date' => $request->issue_date,
-            'expiry_date' => $request->expiry_date,
-            'remarks' => $request->remarks
-        ]);
+{
+    $certificate = VesselCertificate::findOrFail($id);
 
-        return redirect()->route('vessel-certificates.show', $certificate->vessel_id);
+    $data = $request->validate([
+        'certificate_name' => 'required',
+        'issue_date' => 'required|date',
+        'expiry_date' => 'required|date',
+        'remarks' => 'nullable',
+        'document' => 'nullable|file|max:5120'
+    ]);
+
+    // FILE UPLOAD
+    if ($request->hasFile('document')) {
+
+        // OPTIONAL: delete old file
+        if ($certificate->document && file_exists(public_path('uploads/certificates/'.$certificate->document))) {
+            unlink(public_path('uploads/certificates/'.$certificate->document));
+        }
+
+        $file = $request->file('document');
+        $filename = time().'_'.$file->getClientOriginalName();
+        $file->move(public_path('uploads/certificates'), $filename);
+
+        $data['document'] = $filename;
     }
+
+    $certificate->update($data);
+
+    return redirect()->route('vessel-certificates.show', $certificate->vessel_id)
+        ->with('success', 'Certificate updated!');
+}
     public function dashboard()
 {
     $totalCertificates = VesselCertificate::count();

@@ -15,11 +15,22 @@ class VoyageLogController extends Controller
     public function create($vesselId)
     {
         $vessel = Vessel::findOrFail($vesselId);
-        return view('shipping.voyage_logs.create', compact('vessel'));
+        $last = VoyageLogHeader::latest()->first();
+        $nextId = $last ? $last->voyage_id + 1 : 1;
+        $voyageCode = 'VL-' . str_pad($nextId, 5, '0', STR_PAD_LEFT);
+        return view('shipping.voyage_logs.create', compact('vessel', 'voyageCode'));
     }
 
     public function store(Request $request)
     {
+        $request->validate([
+            'cargo_type' => 'required',
+            'cargo_volume' => 'required',
+            'crew_on_board' => 'required',
+            'port_location' => 'required',
+            'voyage_no' => 'required',
+            'fuel_rob' => 'required',
+        ]);
         $voyage = VoyageLogHeader::create([
             'date_created' => DATE('Y-m-d'),
             'cargo_type' => $request->cargo_type,
@@ -50,16 +61,18 @@ class VoyageLogController extends Controller
             ->with('success', 'Voyage log updated successfully.');
     }
     
-    public function index()
+    /*public function index()
     {
         $voyages = VoyageLogHeader::with('vessel')
             ->latest()
             ->paginate(10);
         return view('shipping.voyage_logs.index',compact('voyages'));
-    }
+    }*/
     public function show($id)
     {
-        $voyage = VoyageLogHeader::with('details','vessel')->findOrFail($id);
+        $voyage = VoyageLogHeader::with('vessel')
+            ->withCount('details') 
+            ->findOrFail($id);
         return view('shipping.voyage_logs.show', compact('voyage'));
     }
     public function addDetail(Request $request,$id)
@@ -88,17 +101,47 @@ class VoyageLogController extends Controller
         ]);
             return back();
     }
+    public function pauseTrail($detailId)
+    {
+        $detail = VoyageLogDetail::findOrFail($detailId);
+        $detail->update([
+            'is_paused' => true,
+            'pause_at' => now()
+        ]);
+        return back();
+    }
+    public function resumeTrail($detailId)
+    {
+        $detail = VoyageLogDetail::findOrFail($detailId);
+        if ($detail->pause_at) {
+            $pausedMinutes = now()->diffInMinutes($detail->pause_at);
+            $detail->update([
+                'total_pause' => $detail->total_pause + $pausedMinutes,
+                'pause_at' => null,
+                'is_paused' => false
+            ]);
+        }
+        return back();
+    }
     public function endTrail($detailId)
     {
         $detail = VoyageLogDetail::findOrFail($detailId);
         $start = Carbon::parse($detail->date_time_started);
         $end = Carbon::now();
-        $detail->date_time_ended = $end;
-        $minutes = $start->diffInMinutes($end);
-        $detail->total_hours = round($minutes / 60, 2);
-        $detail->save();
+        $totalMinutes = $start->diffInMinutes($end);
+        $totalPause = $detail->total_pause;
+        if ($detail->is_paused && $detail->pause_at) {
+            $pausedMinutes = $end->diffInMinutes($detail->pause_at);
+            $totalPause += $pausedMinutes;
+        }
+        $actualMinutes = $totalMinutes - $totalPause;
+        $detail->update([
+            'date_time_ended' => $end,
+            'total_hours' => round($actualMinutes / 60, 2),
+            'is_paused' => false,
+            'pause_at' => null
+        ]);
         return back();
-
     }
     public function completeTrail($detailId)
     {

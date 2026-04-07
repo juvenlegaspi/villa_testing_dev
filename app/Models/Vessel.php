@@ -10,6 +10,7 @@ class Vessel extends Model
     
     protected $fillable = [
         'vessel_name',
+        'captain_id',
         'imo_number',
         'call_sign',
         'vessel_type',
@@ -26,6 +27,10 @@ class Vessel extends Model
     public function certificates()
     {
         return $this->hasMany(VesselCertificate::class);
+    }
+    public function captain()
+    {
+        return $this->belongsTo(User::class, 'captain_id');
     }
 }
 

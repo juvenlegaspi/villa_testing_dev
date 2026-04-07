@@ -124,12 +124,39 @@
                         </div>
                     @endif
                 <br>
-                    {{-- ACTIVE TRAIL --}}
+                    {{-- STATUS BADGE --}}
+                    <div class="mb-2">
+                        @if($detail->is_paused)
+                            <span class="badge bg-warning">PAUSED</span>
+                        @elseif(!$detail->date_time_ended)
+                            <span class="badge bg-success">RUNNING</span>
+                        @else
+                            <span class="badge bg-secondary">ENDED</span>
+                        @endif
+                    </div>
+                    {{-- BUTTONS --}}
                     @if(!$detail->date_time_ended && $loop->last)
-                        <form method="POST" action="/shipping/voyage-logs/{{ $detail->dtl_id }}/end">
-                        @csrf
-                            <button class="btn btn-warning btn-sm"> END </button>
-                        </form>
+                        <div class="d-flex gap-2">
+                            {{-- PAUSE / RESUME --}}
+                             @if(!$detail->is_paused)
+                                <form method="POST" action="{{ url('/shipping/voyage-logs/'.$detail->dtl_id.'/pause') }}">
+                                    @csrf
+                                    <button class="btn btn-warning btn-sm">PAUSE</button>
+                                </form>
+                            @else
+                                <form method="POST" action="{{ url('/shipping/voyage-logs/'.$detail->dtl_id.'/resume') }}">
+                                    @csrf
+                                    <button class="btn btn-success btn-sm">RESUME</button>
+                                </form>
+                            @endif
+                            {{-- END BUTTON (only if not paused) --}}
+                            @if(!$detail->is_paused)
+                                <form method="POST" action="{{ url('/shipping/voyage-logs/'.$detail->dtl_id.'/end') }}">
+                                    @csrf
+                                    <button class="btn btn-danger btn-sm">END</button>
+                                </form>
+                            @endif
+                        </div>
                     @endif
                     {{-- ENDED BUT NOT COMPLETED --}}
                     @if($detail->date_time_ended && $detail->status != 'COMPLETED' && $loop->last)
@@ -208,7 +235,7 @@
                     <div class="row">
                         <div class="col-md-4">
                             <select name="voyage_status" class="form-control">
-                                <option></option>
+                                <option>--SELECT ONE--</option>
                                 <option>AT BERTH</option>
                                 <option>SAILING</option>
                                 <option>ANCHORED</option>

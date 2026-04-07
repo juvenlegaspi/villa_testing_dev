@@ -36,50 +36,136 @@ class TechDefectController extends Controller
     }
     public function index(Request $request)
     {
-        $status = $request->status;
-        $search = $request->search;
-        $query = TechDefect::with('vessel')->orderByRaw("
-            CASE
-            WHEN status = 'Open' THEN 1
-            WHEN status = 'Ongoing' THEN 2
-            WHEN status = 'Waiting 3rd Party' THEN 3
-            WHEN status = 'Completed' THEN 4
-            END
-        ")->orderBy('id','asc');
-        if($status){
-            $query->where('status',$status);
+        $user = auth()->user();
+        if ($user->is_admin) {
+            $query = TechDefect::with('vessel');
+        } else {
+            $query = TechDefect::with('vessel')
+                ->whereHas('vessel', function ($q) use ($user) {
+                    $q->where('captain_id', $user->id);
+                });
         }
-        if($search){
-            $query->where(function($q) use ($search){
-                $q->where('id','like',"%$search%")->orWhereHas('vessel',function($v) use ($search){
-                    $v->where('vessel_name','like',"%$search%");
+        // STATUS FILTER
+        if ($request->status) {
+            $query->where('status', $request->status);
+        }
+        // SEARCH
+        if ($request->search) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('id', 'like', "%$search%")
+                ->orWhereHas('vessel', function ($v) use ($search) {
+                    $v->where('vessel_name', 'like', "%$search%");
                 });
             });
         }
-        $reports = $query->paginate(10)->withQueryString();
-        return view('shipping.tech_defects.index',compact('reports','status'));
+        $query->orderByRaw("
+            CASE
+                WHEN status = 'Open' THEN 1
+                WHEN status = 'Ongoing' THEN 2
+                WHEN status = 'Waiting 3rd Party' THEN 3
+                WHEN status = 'Completed' THEN 4
+            END
+        ");
+        $reports = $query->orderBy('id', 'asc')
+                ->paginate(10)
+                ->withQueryString();
+        return view('shipping.tech_defects.index', compact('reports'));
     }
     public function create()
     {
-        $vessels = Vessel::all();
-        return view('shipping.tech_defects.create',compact('vessels'));
+        $user = auth()->user();
+        // ADMIN → tanan vessels
+        if ($user->is_admin) {
+            $vessels = Vessel::all();
+        }
+        // MANAGER → tanan vessels sa iya department
+        elseif ($user->role == 'manager' && $user->department_id == 1) {
+            $vessels = Vessel::where('department_id', $user->department_id)->get();
+        }
+        // CAPTAIN → assigned vessel ra
+        elseif ($user->role == 'captain' && $user->department_id == 1) {
+            $vessels = Vessel::where('captain_id', $user->id)->get();
+        }
+        else {
+            $vessels = collect(); // empty
+        }
+            return view('shipping.tech_defects.create', compact('vessels'));
     }
     // create report of vessel
     public function store(Request $request)
     {
-        $report = TechDefect::create($request->all());
-        return redirect()->route('tech-defects.show', ['id' => $report->id])
-        ->with('success','Report added');
-    }
+        $user = auth()->user();
+        // ✅ VALIDATION
+        $request->validate([
+            'vessel_id' => 'required|exists:vessels,id',
+            'date_identified' => 'required|date',
+            'port_location' => 'nullable|string|max:255',
+            'reported_by' => 'nullable|string|max:255',
+            'system_affected' => 'nullable|string|max:255',
+            'defect_description' => 'required|string',
+            'initial_cause' => 'nullable|string',
+            'severity_level' => 'required',
+            'operational_impact' => 'required',
+            'temporary_repair' => 'nullable',
+            'remarks' => 'nullable|string',
+        ]);
+        // ✅ SECURITY: vessel restriction
+        if ($user->role == 'captain' && $user->department_id == 1) {
+            $allowedVessel = Vessel::where('captain_id', $user->id)
+                               ->pluck('id')
+                               ->toArray();
 
+            if (!in_array($request->vessel_id, $allowedVessel)) {
+                abort(403, 'Unauthorized vessel');
+            }
+        }
+        if ($user->role == 'manager' && $user->department_id == 1) {
+            $allowedVessel = Vessel::where('department_id', $user->department_id)
+                               ->pluck('id')
+                               ->toArray();
+
+            if (!in_array($request->vessel_id, $allowedVessel)) {
+                abort(403, 'Unauthorized vessel');
+            }
+        }
+        // ✅ SAVE DATA (SAFE VERSION)
+        $report = TechDefect::create([
+            'vessel_id' => $request->vessel_id,
+            'status' => 'Open',
+            'date_identified' => $request->date_identified,
+            'port_location' => strtoupper($request->port_location),
+            'reported_by' => strtoupper($request->reported_by),
+            'system_affected' => strtoupper($request->system_affected),
+            'defect_description' => strtoupper($request->defect_description),
+            'initial_cause' => strtoupper($request->initial_cause),
+            'severity_level' => $request->severity_level,
+            'operational_impact' => $request->operational_impact,
+            'temporary_repair' => $request->temporary_repair,
+            'remarks' => strtoupper($request->remarks),
+        ]);
+        return redirect()
+            ->route('tech-defects.show', $report->id)
+            ->with('success', 'Report added successfully');
+    }
     public function edit($id)
     {
+        $user = auth()->user();
         $report = TechDefect::findOrFail($id);
-        $vessels = Vessel::all();
-
-        return view('shipping.tech_defects.edit',compact('report','vessels'));
+        if ($user->is_admin) {
+            $vessels = Vessel::all();
+        }
+        elseif ($user->role == 'manager' && $user->department_id == 1) {
+            $vessels = Vessel::where('department_id', $user->department_id)->get();
+        }
+        elseif ($user->role == 'captain' && $user->department_id == 1) {
+            $vessels = Vessel::where('captain_id', $user->id)->get();
+        }
+        else {
+            $vessels = collect();
+        }
+        return view('shipping.tech_defects.edit', compact('report','vessels'));
     }
-
     public function update(Request $request,$id)
     {
         $report = TechDefect::findOrFail($id);

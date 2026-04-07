@@ -5,6 +5,7 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use App\Models\Department;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Facades\Auth;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -21,10 +22,19 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
         view()->composer('*', function ($view) {
-        $view->with('allDepartments', Department::all());
-        Paginator::useBootstrap();
-    });
+            if (Auth::check()) {
+                $user = Auth::user();
+                if ($user->is_admin == 1) {
+                    // ADMIN → makita tanan
+                    $departments = Department::all();
+                } else {
+                    // USER → iya ra department
+                    $departments = Department::where('id', $user->department_id)->get();
+                }
+                $view->with('allDepartments', $departments);
+            }
+            Paginator::useBootstrap();
+        });
     }
 }
